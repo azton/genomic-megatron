@@ -1040,11 +1040,11 @@ def _add_distributed_args(parser):
                        choices=['local', 'torch', 'FSDP'],
                        help='which DistributedDataParallel implementation '
                        'to use.')
-    # group.add_argument('--no-contiguous-buffers-in-local-ddp',
-    #                    action='store_false', help='If set, dont use '
-    #                    'contiguous buffer in local DDP.',
-    #                    dest='use_contiguous_buffers_in_local_ddp')
-    group.add_argument('--use-contiguous-buffers-in-ddp', action='store_true',
+    group.add_argument('--no-contiguous-buffers-in-local-ddp',
+                       action='store_false', help='If set, dont use '
+                       'contiguous buffer in local DDP.',
+                       dest='use_contiguous_buffers_in_local_ddp')
+    group.add_argument('--use-contiguous-buffers-in-local-ddp', action='store_true',
                        help='If set, use contiguous buffer in DDP. Note that '
                        'this option only works woth local DDP.' )
     group.add_argument('--no-scatter-gather-tensors-in-pipeline', action='store_false',
@@ -1163,6 +1163,7 @@ def _add_data_args(parser):
                                 'GPT2BPETokenizer',
                                 'SentencePieceTokenizer',
                                 'GPTSentencePieceTokenizer',
+                                'GenomeTokenizer',
                                 'NullTokenizer'],
                        help='What type of tokenizer to use.')
     group.add_argument('--tokenizer-model', type=str, default=None,
@@ -1192,7 +1193,10 @@ def _add_data_args(parser):
                        help='Force to use certain index file.')
     group.add_argument('--train-shuffle-idx-path', type=str, default=None,
                        help='Force to use certain index file.')
-
+    group.add_argument('--genome-k-window', type=int, default=None,
+                       help="Sliding window size for GenomeTokenizer dataset.  None for fixed window.")
+    group.add_argument('--genslm', action='store_true',
+                       help="Identify if using GenSLM dataset pardigms.")
     return parser
 
 

@@ -15,6 +15,7 @@ from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
+import torch.distributed as ptdist
 
 from deepspeed.runtime.utils import see_memory_usage
 
@@ -87,13 +88,19 @@ class BertLMHead(MegatronModule):
             self.gelu = erf_gelu
 
     def forward(self, hidden_states, word_embeddings_weight):
+        if ptdist.get_rank() == 0:
+            print(f"In BertLMHead forward")
         hidden_states = self.dense(hidden_states)
         hidden_states = self.gelu(hidden_states)
         hidden_states = self.layernorm(hidden_states)
+        print(f"[{ptdist.get_rank()}] Calling parallel_lm_logits")
         output = parallel_lm_logits(hidden_states,
                                     word_embeddings_weight,
                                     self.parallel_output,
                                     bias=self.bias)
+        print(f"[{ptdist.get_rank()}] Done parallel_lm_logits")
+        print(f"[{ptdist.get_rank()}] output shape {output.shape}")
+        
         return output
 
 
@@ -103,29 +110,40 @@ def post_language_model_processing(lm_output, pooled_output,
                                    logit_weights,
                                    fp16_lm_cross_entropy):
     # Output.
+    if ptdist.get_rank() == 0:
+        print(f"In post_language_model_processing")
+        print(f"lm_output shape {lm_output.shape}")
+        print(f"pooled_output shape {lm_labels.shape}")
+
     lm_logits = lm_head(
         lm_output, logit_weights)
+    if ptdist.get_rank() == 0:
+        print(f"Back in post: lm_logits shape {lm_logits.shape}")
 
     binary_logits = None
-    if binary_head is not None:
-        binary_logits = binary_head(pooled_output)
+    # if binary_head is not None:
+    #     binary_logits = binary_head(pooled_output)
 
-    if lm_labels is None:
-        # [s b h] => [b s h]
-        return lm_logits.transpose(0,1).contiguous(), binary_logits
+    # if lm_labels is None:
+    #     # [s b h] => [b s h]
+    #     return lm_logits.transpose(0,1).contiguous(), binary_logits
+    # else:
+    # [b s] => [s b]
+    if ptdist.get_rank() == 0:
+        print(f"transposing lm_labels shape {lm_labels.shape}")
+    lm_labels = lm_labels.transpose(0,1).contiguous()
+    # lm_logits : [s, b, h] and lm_labels: [s, b]
+    if ptdist.get_rank() == 0:
+        print(f"calling up cross-entropy")
+    if fp16_lm_cross_entropy:
+        assert lm_logits.dtype == torch.half
+        lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits, lm_labels)
     else:
-        # [b s] => [s b]
-        lm_labels = lm_labels.transpose(0,1).contiguous()
-        # lm_logits : [s, b, h] and lm_labels: [s, b]
-        if fp16_lm_cross_entropy:
-            assert lm_logits.dtype == torch.half
-            lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits, lm_labels)
-        else:
-            lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits.float(),
-                                                        lm_labels)
-        # [s, b] => [b s]
-        lm_loss = lm_loss.transpose(0,1).contiguous()
-        return lm_loss, binary_logits
+        lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits.float(),
+                                                    lm_labels)
+    # [s, b] => [b s]
+    lm_loss = lm_loss.transpose(0,1).contiguous()
+    return lm_loss, binary_logits
 
 
 class BertModel(MegatronModule):
@@ -225,13 +243,18 @@ class BertModel(MegatronModule):
 
         else:
             pooled_output = None
-
+            lm_output = lm_output[0]
+        if ptdist.get_rank() == 0:
+            print(f"Processing post language model; post_process={self.post_process}")
         if self.post_process:
-            return post_language_model_processing(lm_output, pooled_output,
+            lm_output = post_language_model_processing(lm_output, pooled_output,
                                                   self.lm_head, self.binary_head,
                                                   lm_labels,
                                                   self.word_embeddings_weight(),
                                                   self.fp16_lm_cross_entropy)
+            if ptdist.get_rank() == 0:
+                print(f"Done post language model")
+            return lm_output
         else:
             return lm_output
 

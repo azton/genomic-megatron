@@ -7,7 +7,7 @@ from abc import abstractmethod
 
 from .bert_tokenization import FullTokenizer as FullBertTokenizer
 from .gpt2_tokenization import GPT2Tokenizer
-
+from .genome_tokenization import GenomeTokenizer
 
 def build_tokenizer(args):
     """Initialize tokenizer."""
@@ -39,6 +39,9 @@ def build_tokenizer(args):
     elif args.tokenizer_type == 'NullTokenizer':
         assert args.vocab_size is not None
         tokenizer = _NullTokenizer(args.vocab_size)
+    elif args.tokenizer_type == "GenomeTokenizer":
+        assert args.vocab_file is not None
+        tokenizer = GenomeTokenizer(args.vocab_file)
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))

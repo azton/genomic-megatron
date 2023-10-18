@@ -150,23 +150,23 @@ def create_tokens_and_tokentypes(tokens_a, tokens_b, cls_id, sep_id):
     tokens = []
     tokentypes = []
     # [CLS].
-    tokens.append(cls_id)
-    tokentypes.append(0)
+    # tokens.append(cls_id)
+    # tokentypes.append(0)
     # Segment A.
     for token in tokens_a:
         tokens.append(token)
         tokentypes.append(0)
     # [SEP].
-    tokens.append(sep_id)
-    tokentypes.append(0)
+    # tokens.append(sep_id)
+    # tokentypes.append(0)
     # Segment B.
-    for token in tokens_b:
-        tokens.append(token)
-        tokentypes.append(1)
-    if tokens_b:
-        # [SEP].
-        tokens.append(sep_id)
-        tokentypes.append(1)
+    # for token in tokens_b:
+    #     tokens.append(token)
+    #     tokentypes.append(1)
+    # if tokens_b:
+    #     # [SEP].
+    #     tokens.append(sep_id)
+    #     tokentypes.append(1)
 
     return tokens, tokentypes
 
@@ -191,14 +191,16 @@ def create_masked_lm_predictions(tokens,
                                  max_predictions_per_seq,
                                  np_rng,
                                  max_ngrams=3,
-                                 do_whole_word_mask=True,
+                                 do_whole_word_mask=False,
                                  favor_longer_ngram=False,
                                  do_permutation=False,
                                  geometric_dist=False,
-                                 masking_style="bert"):
+                                 masking_style="bert",
+                                 sliding_window=None):
     """Creates the predictions for the masked LM objective.
     Note: Tokens here are vocab ids and not text tokens."""
-
+    print(f"create_predictions: tokens: {len(tokens)}, {min(tokens)}, {max(tokens)}", flush=True)
+    print(f"vocab_ids list: {vocab_id_list}", flush=True)
     cand_indexes = []
     # Note(mingdachen): We create a list for recording if the piece is
     # the starting piece of current token, where 1 means true, so that
@@ -316,9 +318,17 @@ def create_masked_lm_predictions(tokens,
                 masked_token = mask_id
             else:
                 raise ValueError("invalid value of masking style")
-
-            output_tokens[index] = masked_token
-            masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
+            
+            # for sliding window, apply the masked token value across k-tokens
+            if sliding_window is not None:
+                slidestart = index-sliding_window//2
+                slideend = index+sliding_window//2
+                for i in range(slidestart, slideend):
+                        output_tokens[i] = masked_token
+                        masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
+            else: # standard single-token masking.
+                output_tokens[index] = masked_token
+                masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
 
         masked_spans.append(MaskedLmInstance(
             index=index_set,
@@ -383,6 +393,10 @@ def create_masked_lm_predictions(tokens,
     for p in masked_lms:
         masked_lm_positions.append(p.index)
         masked_lm_labels.append(p.label)
+    # cut down to size if needed
+    # output_tokens = output_tokens[:max_num_tokens]
+    # masked_lm_labels = masked_lm_labels[:max_num_tokens]
+
     return (output_tokens, masked_lm_positions, masked_lm_labels, token_boundary, masked_spans)
 
 
@@ -425,7 +439,8 @@ def build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                                     masked_lm_prob, short_seq_prob, seed,
                                     skip_warmup, binary_head=False,
                                     max_seq_length_dec=None,
-                                    dataset_type='standard_bert'):
+                                    dataset_type='standard_bert',
+                                    sliding_window=None):
 
     if len(data_prefix) == 1:
         return _build_train_valid_test_datasets(data_prefix[0],
@@ -436,7 +451,8 @@ def build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                                                 skip_warmup,
                                                 binary_head,
                                                 max_seq_length_dec,
-                                                dataset_type=dataset_type)
+                                                dataset_type=dataset_type,
+                                                sliding_window=sliding_window)
     # Blending dataset.
     # Parse the values.
     output = get_datasets_weights_and_num_samples(data_prefix,
@@ -457,7 +473,8 @@ def build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
             datasets_train_valid_test_num_samples[i],
             max_seq_length, masked_lm_prob, short_seq_prob,
             seed, skip_warmup, binary_head, max_seq_length_dec,
-            dataset_type=dataset_type)
+            dataset_type=dataset_type,
+            sliding_window=sliding_window)
         if train_ds:
             train_datasets.append(train_ds)
         if valid_ds:
@@ -486,7 +503,8 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                                      masked_lm_prob, short_seq_prob, seed,
                                      skip_warmup, binary_head,
                                      max_seq_length_dec,
-                                     dataset_type='standard_bert'):
+                                     dataset_type='standard_bert',
+                                     sliding_window=None):
 
     if dataset_type not in DSET_TYPES:
         raise ValueError("Invalid dataset_type: ", dataset_type)
@@ -573,6 +591,7 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                     masked_lm_prob=masked_lm_prob,
                     short_seq_prob=short_seq_prob,
                     binary_head=binary_head,
+                    sliding_window=sliding_window,
                     **kwargs
                 )
             else:
