@@ -236,7 +236,12 @@ def get_batch(data_iterator):
 
     tokens = tokens[:, sub_seq_start:sub_seq_end]
     position_ids = position_ids[:, sub_seq_start:sub_seq_end]
-
+    # print_rank_0('>>> tokens size {}'.format(tokens.size()))
+    # print_rank_0('>>> tokens sample: {}'.format(tokens[0, :100]))
+    # print_rank_0('>>> position_ids size {}'.format(position_ids.size()))
+    # print_rank_0('>>> labels size {}'.format(labels.size()))
+    # print_rank_0(">>> labels sample: {}".format(labels[0, :100]))
+    # print_rank_0('>>> loss_mask size {}'.format(loss_mask.size()))
     return tokens, labels, loss_mask, attention_mask, position_ids
 
 
@@ -265,7 +270,6 @@ def data_post_process(data, data_sampler_state_dict):
             args.data_efficiency_curriculum_learning_seqlen_type = None
     return data
 
-
 def get_batch_pipe(data):
     """Modification of `get_batch` to work on `next(data_iterator)` instead of `data_iterator`"""
     args = get_args()
@@ -280,8 +284,8 @@ def get_batch_pipe(data):
 
     # Unpack.
     tokens_ = data_b['text'].long()
-    labels = tokens_[:, 1:].contiguous()
-    tokens = tokens_[:, :-1].contiguous()
+    labels = tokens_[:, 3:].contiguous()
+    tokens = tokens_[:, :-3].contiguous()
 
     # Get the masks and postition ids.
     attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
@@ -298,7 +302,14 @@ def get_batch_pipe(data):
         if labels is not None:
             labels = labels[:, :args.curriculum_seqlen].contiguous()
         loss_mask = loss_mask[:, :args.curriculum_seqlen].contiguous()
-
+    # if printout:
+    #     print_rank_0('>>> tokens size {}'.format(tokens.size()))
+    #     print_rank_0('>>> tokens sample: {}'.format(tokens[0, :100]))
+    #     print_rank_0('>>> position_ids size {}'.format(position_ids.size()))
+    #     print_rank_0('>>> labels size {}'.format(labels.size()))
+    #     print_rank_0(">>> labels sample: {}".format(labels[0, :100]))
+    #     print_rank_0('>>> loss_mask size {}'.format(loss_mask.size()))
+    #     printout = False
     return (tokens, position_ids, attention_mask), (labels, loss_mask)
 
 

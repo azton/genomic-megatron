@@ -46,7 +46,7 @@ except (ImportError, ModuleNotFoundError):
         flash_attn_unpadded_func = None
 
 try:
-    from flash_attn.flash_attn_triton import flash_attn_func
+    from flash_attn import flash_attn_func
 except (ImportError, ModuleNotFoundError):
     log.info(f"Unable to import `flash_attn_triton.flash_attn_func` from `flash_attn`")
     flash_attn_func = None
@@ -465,7 +465,8 @@ class FlashSelfAttentionTriton(torch.nn.Module):
         
         ##Triton
         # print(f"FlashSelfAttentionTriton causal={self.causal}")
-        output = flash_attn_func(q, k, v, None, self.causal)
+        # output = flash_attn_func(q, k, v, None, self.causal)
+        output = flash_attn_func(q, k, v, dropout_p=0, causal=self.causal)
         #print_rank_0('Triton OUTPUT shape {} '.format(output.shape))
 
         output = rearrange(output, 'b s h d -> s b (h d)').contiguous()
