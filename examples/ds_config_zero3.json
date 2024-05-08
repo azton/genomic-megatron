@@ -1,0 +1,42 @@
+{
+    "train_micro_batch_size_per_gpu": 1,
+    "steps_per_print": 1,
+    "wall_clock_breakdown" : true,
+    "gradient_accumulation_steps": 1,
+    "gradient_clipping": 1.0,
+    "zero_optimization": {
+      "stage": 1,
+      "contiguous_gradients": true,
+      "overlap_comm": true,
+      "reduce_bucket_size": 90000000,
+      "sub_group_size": 5e7,
+      "offload_param": {
+        "device": "cpu",
+        "pin_memory": true
+      },
+      "offload_optimizer": {
+        "device": "cpu",
+        "buffer_count": 4,
+        "pipeline_read": false,
+        "pipeline_write": false,
+        "pin_memory": true
+      }
+    },
+    "bf16": {
+      "enabled": true
+    },
+    "flops_profiler": {
+      "enabled": true,
+      "profile_step": 1,
+      "module_depth": -1,
+      "top_modules": 3,
+      "detailed": true,
+      "output_file": null
+    },
+    "comms_logger": {
+      "enabled": true,
+      "verbose": false,
+      "prof_all": false,
+      "debug": false
+    }
+  }
